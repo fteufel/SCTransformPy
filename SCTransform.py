@@ -49,7 +49,7 @@ def _parallel_init(igenes_bin_regress,iumi_bin,ign,imm,ips):
     
 def _parallel_wrapper(j):
     name = gn[genes_bin_regress[j]]
-    y = umi_bin[:,j].A.flatten()
+    y = umi_bin[:,j].A.flatten() if isinstance(umi_bin, sp.sparse.sparse.spmatrix) else umi_bin[:,j].flatten()
     pr = statsmodels.discrete.discrete_model.Poisson(y,mm)
     res = pr.fit(disp=False)
     mu = res.predict()
@@ -59,8 +59,8 @@ def _parallel_wrapper(j):
     
 def gmean(X,axis=0,eps=1):
     X=X.copy()
-    X.data[:] = np.log(X.data+eps)       
-    return np.exp(X.mean(axis).A.flatten())-eps
+    X.data[:] = np.log(X.data+eps)
+    return np.exp(X.mean(axis).A.flatten())-eps if isinstance(X, sp.sparse.sparse.spmatrix) else np.exp(X.mean(axis).flatten())-eps
 
 def theta_ml(y,mu):
     n = y.size
@@ -101,7 +101,7 @@ def SCTransform(adata,min_cells=5,gmean_eps=1,n_genes=2000,n_cells=None,bin_size
     X=adata.X.copy()
     gn = np.array(list(adata.var_names))
     cn = np.array(list(adata.obs_names))
-    genes_cell_count = X.sum(0).A.flatten()
+    genes_cell_count = X.sum(0).A.flatten() if isinstance(X, sp.sparse.sparse.spmatrix) else X.sum(0).flatten()
     genes = np.where(genes_cell_count >= min_cells)[0]
     genes_ix=genes.copy()
     
@@ -109,14 +109,14 @@ def SCTransform(adata,min_cells=5,gmean_eps=1,n_genes=2000,n_cells=None,bin_size
     Xraw=X.copy()
     gn = gn[genes]
     genes = np.arange(X.shape[1])
-    genes_cell_count = X.sum(0).A.flatten()
+    genes_cell_count = X.sum(0).A.flatten() if isinstance(X, sp.sparse.sparse.spmatrix) else X.sum(0).flatten()
 
 
     genes_log_gmean = np.log10(gmean(X,axis=0,eps=gmean_eps))
 
     if n_cells is not None and n_cells < X.shape[0]:
         cells_step1 = np.sort(np.random.choice(X.shape[0],replace=False,size=n_cells))
-        genes_cell_count_step1 = X[cells_step1].sum(0).A.flatten()
+        genes_cell_count_step1 = X[cells_step1].sum(0).A.flatten() if isinstance(X, sp.sparse.sparse.spmatrix) else  X[cells_step1].sum(0).flatten()
         genes_step1 = np.where(genes_cell_count_step1 >= min_cells)[0]
         genes_log_gmean_step1 = np.log10(gmean(X[cells_step1][:,genes_step1],axis=0,eps=gmean_eps))
     else:
@@ -125,11 +125,11 @@ def SCTransform(adata,min_cells=5,gmean_eps=1,n_genes=2000,n_cells=None,bin_size
         genes_log_gmean_step1 = genes_log_gmean
 
 
-    umi = X.sum(1).A.flatten()
+    umi = X.sum(1).A.flatten() if isinstance(X, sp.sparse.sparse.spmatrix) else X.sum(1).flatten()
     log_umi = np.log10(umi)
     X2=X.copy()
     X2.data[:]=1
-    gene = X2.sum(1).A.flatten()
+    gene = X2.sum(1).A.flatten() if isinstance(X, sp.sparse.sparse.spmatrix) else X2.sum(1).flatten()
     log_gene = np.log10(gene)
     umi_per_gene = umi / gene
     log_umi_per_gene = np.log10(umi_per_gene)
