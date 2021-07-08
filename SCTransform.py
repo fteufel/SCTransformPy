@@ -59,8 +59,13 @@ def _parallel_wrapper(j):
     
 def gmean(X,axis=0,eps=1):
     X=X.copy()
-    X.data[:] = np.log(X.data+eps)
-    return np.exp(X.mean(axis).A.flatten())-eps if isinstance(X, sp.sparse.spmatrix) else np.exp(X.mean(axis).flatten())-eps
+    if isinstance(X, sp.sparse.spmatrix):
+        X.data[:] = np.log(X.data+eps)
+        gmean = np.exp(X.mean(axis).A.flatten())-eps
+    else:
+        X[:] = np.log(X+eps)
+        gmean = np.exp(X.mean(axis).flatten())-eps
+    return gmean 
 
 def theta_ml(y,mu):
     n = y.size
@@ -128,8 +133,14 @@ def SCTransform(adata,min_cells=5,gmean_eps=1,n_genes=2000,n_cells=None,bin_size
     umi = X.sum(1).A.flatten() if isinstance(X, sp.sparse.spmatrix) else X.sum(1).flatten()
     log_umi = np.log10(umi)
     X2=X.copy()
-    X2.data[:]=1
-    gene = X2.sum(1).A.flatten() if isinstance(X, sp.sparse.spmatrix) else X2.sum(1).flatten()
+
+    if isinstance(X, sp.sparse.spmatrix):
+        X2.data[:]=1
+        gene = X2.sum(1).A.flatten() 
+    else: 
+        X2[:]=1
+        gene = X2.sum(1).flatten()
+
     log_gene = np.log10(gene)
     umi_per_gene = umi / gene
     log_umi_per_gene = np.log10(umi_per_gene)
@@ -211,18 +222,25 @@ def SCTransform(adata,min_cells=5,gmean_eps=1,n_genes=2000,n_cells=None,bin_size
     regressor_data = np.vstack((np.ones(cell_attrs.shape[0]),cell_attrs['log_umi'].values)).T
 
 
-    d = X.data
+    d = X.data if isinstance(X, sp.sparse.spmatrix) else X
     x,y = X.nonzero()
 
     mud = np.exp(full_model_pars.values[:,0][y] + full_model_pars.values[:,1][y] * cell_attrs['log_umi'].values[x])
     vard = mud+mud**2 / full_model_pars['theta'].values.flatten()[y]
 
-    X.data[:] = (d - mud) / vard**0.5
-    X.data[X.data<0]=0
-    X.eliminate_zeros()
+    if isinstance(X, sp.sparse.spmatrix):
+        X.data[:] = (d - mud) / vard**0.5
+        X.data[X.data<0]=0
+        X.eliminate_zeros()
     
-    clip = np.sqrt(X.shape[0]/30)
-    X.data[X.data>clip]=clip
+        clip = np.sqrt(X.shape[0]/30)
+        X.data[X.data>clip]=clip
+    else:
+        X[:] = (d - mud) / vard**0.5
+        X[X<0]=0
+    
+        clip = np.sqrt(X.shape[0]/30)
+        X[X>clip]=clip
     
     if inplace:
         adata.raw = adata.copy()
@@ -230,7 +248,7 @@ def SCTransform(adata,min_cells=5,gmean_eps=1,n_genes=2000,n_cells=None,bin_size
         d = dict(zip(np.arange(X.shape[1]),genes_ix))
         x,y = X.nonzero()
         y = np.array([d[i] for i in y])
-        data = X.data
+        data = X.data if isinstance(X, sp.sparse.spmatrix) else X
         Xnew = sp.sparse.coo_matrix((data, (x, y)), shape=adata.shape).tocsr()
         adata.X = Xnew # TODO: add log1p of corrected umi counts to layers
         
